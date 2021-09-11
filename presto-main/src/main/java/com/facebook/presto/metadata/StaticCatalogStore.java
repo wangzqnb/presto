@@ -29,10 +29,25 @@ import java.util.Map.Entry;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import com.facebook.presto.server.PrestoServer.DatasourceAction;
+
+import static com.facebook.presto.server.PrestoServer.updateDatasourcesAnnouncement;
 import static com.facebook.presto.util.PropertiesUtil.loadProperties;
 import static com.google.common.base.MoreObjects.firstNonNull;
 import static com.google.common.base.Preconditions.checkState;
 
+import java.io.IOException;
+import java.nio.file.FileSystems;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardWatchEventKinds;
+import java.nio.file.WatchEvent;
+import java.nio.file.WatchKey;
+import java.nio.file.WatchService;
+
+/**
+ * 静态加载catalog
+ */
 public class StaticCatalogStore
 {
     private static final Logger log = Logger.get(StaticCatalogStore.class);
@@ -84,6 +99,17 @@ public class StaticCatalogStore
         additionalCatalogs.forEach(this::loadCatalog);
 
         catalogsLoaded.set(true);
+
+        //开启catalog监控线程
+        new Thread(() -> {
+            try {
+                log.info(">>>>>>>>>> Catalog watcher thread start <<<<<<<<<<");
+                startCatalogWatcher(catalogConfigurationDir);
+            }
+            catch (Exception e) {
+                e.printStackTrace();
+            }
+        }).start();
     }
 
     private void loadCatalog(File file)
@@ -134,4 +160,81 @@ public class StaticCatalogStore
         }
         return ImmutableList.of();
     }
+
+    /**
+     *动态更改catalog（增、删、改）
+     */
+    private void startCatalogWatcher(File catalogConfigurationDir) throws IOException, InterruptedException
+    {
+        WatchService watchService = FileSystems.getDefault().newWatchService();
+        Paths.get(catalogConfigurationDir.getAbsolutePath()).register(
+                watchService, StandardWatchEventKinds.ENTRY_CREATE,
+                StandardWatchEventKinds.ENTRY_DELETE,
+                StandardWatchEventKinds.ENTRY_MODIFY);
+        while (true) {
+            WatchKey key = watchService.take();
+            for (WatchEvent<?> event : key.pollEvents()) {
+                if (event.kind() == StandardWatchEventKinds.ENTRY_CREATE) {
+                    log.info("New file in catalog directory : " + event.context());
+                    Path newCatalog = (Path) event.context();
+                    addCatalog(newCatalog);
+                }
+                else if (event.kind() == StandardWatchEventKinds.ENTRY_DELETE) {
+                    log.info("Delete file from catalog directory : " + event.context());
+                    Path deletedCatalog = (Path) event.context();
+                    deleteCatalog(deletedCatalog);
+                }
+                else if (event.kind() == StandardWatchEventKinds.ENTRY_MODIFY) {
+                    log.info("Modify file from catalog directory : " + event.context());
+                    Path modifiedCatalog = (Path) event.context();
+                    modifyCatalog(modifiedCatalog);
+                }
+            }
+            boolean valid = key.reset();
+            if (!valid) {
+                break;
+            }
+        }
+    }
+
+    /**
+     *增加catalog
+     */
+    private void addCatalog(Path catalogPath)
+    {
+        File file = new File(catalogConfigurationDir, catalogPath.getFileName().toString());
+        if (file.isFile() && file.getName().endsWith(".properties")) {
+            try {
+                loadCatalog(file);
+                updateDatasourcesAnnouncement(Files.getNameWithoutExtension(catalogPath.getFileName().toString()), DatasourceAction.ADD);
+            }
+            catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
+    /**
+     *删除catalog
+     */
+    private void deleteCatalog(Path catalogPath)
+    {
+        if (catalogPath.getFileName().toString().endsWith(".properties")) {
+            String catalogName = Files.getNameWithoutExtension(catalogPath.getFileName().toString());
+            log.info("-- Removing catalog %s", catalogName);
+            connectorManager.dropConnection(catalogName);
+            updateDatasourcesAnnouncement(catalogName, DatasourceAction.DELETE);
+        }
+    }
+
+    /**
+     *修改catalog
+     */
+    private void modifyCatalog(Path catalogPath)
+    {
+        deleteCatalog(catalogPath);
+        addCatalog(catalogPath);
+    }
+
+
 }

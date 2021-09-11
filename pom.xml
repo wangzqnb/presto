@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
     <parent>
@@ -34,12 +35,16 @@
     </scm>
 
     <properties>
+        <!--win编译增加-->
+        <air.check.skip-extended>true</air.check.skip-extended>
+
         <air.main.basedir>${project.basedir}</air.main.basedir>
 
         <air.check.skip-spotbugs>true</air.check.skip-spotbugs>
         <air.check.skip-pmd>true</air.check.skip-pmd>
         <air.check.skip-jacoco>true</air.check.skip-jacoco>
-        <air.checkstyle.config-file>src/checkstyle/presto-checks.xml</air.checkstyle.config-file>
+        <!--win编译需注释掉-->
+        <!--<air.checkstyle.config-file>src/checkstyle/presto-checks.xml</air.checkstyle.config-file>-->
 
         <air.java.version>1.8.0-151</air.java.version>
         <air.maven.version>3.3.9</air.maven.version>
@@ -141,7 +146,7 @@
         <module>presto-benchmark-driver</module>
         <module>presto-server</module>
         <module>presto-server-rpm</module>
-        <module>presto-docs</module>
+<!--        <module>presto-docs</module>-->
         <module>presto-verifier</module>
         <module>presto-testing-server-launcher</module>
         <module>presto-plugin-toolkit</module>
@@ -1820,7 +1825,7 @@
                 <version>0.1.2</version>
                 <exclusions>
                     <exclusion>
-                        <groupId> org.slf4j</groupId>
+                        <groupId>org.slf4j</groupId>
                         <artifactId>slf4j-api</artifactId>
                     </exclusion>
                     <exclusion>
@@ -2017,6 +2022,14 @@
 
         <plugins>
             <plugin>
+                <groupId>pl.project13.maven</groupId>
+                <artifactId>git-commit-id-plugin</artifactId>
+                <configuration>
+                    <skip>true</skip>
+                </configuration>
+            </plugin>
+
+            <plugin>
                 <groupId>com.facebook.presto</groupId>
                 <artifactId>presto-maven-plugin</artifactId>
             </plugin>
@@ -2060,9 +2073,9 @@
                         </manifest>
                         <manifestEntries>
                             <!-- This is actually the time when the build was done -->
-                            <Build-Time>${git.build.time}</Build-Time>
+                            <!--<Build-Time>${git.build.time}</Build-Time>
                             <Git-Commit-Id>${git.commit.id}</Git-Commit-Id>
-                            <Implementation-Version>${project.version}-${git.commit.id.abbrev}</Implementation-Version>
+                            <Implementation-Version>${project.version}-${git.commit.id.abbrev}</Implementation-Version>-->
                         </manifestEntries>
                     </archive>
                 </configuration>

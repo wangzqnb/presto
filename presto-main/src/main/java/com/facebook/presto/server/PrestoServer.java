@@ -76,6 +76,13 @@ import static java.util.Objects.requireNonNull;
 public class PrestoServer
         implements Runnable
 {
+
+    private static Announcer announcer;
+
+    public enum DatasourceAction {
+        ADD, DELETE;
+    }
+
     public static void main(String[] args)
     {
         new PrestoServer().run();
@@ -144,16 +151,19 @@ public class PrestoServer
                 injector.getInstance(StaticCatalogStore.class).loadCatalogs();
             }
 
+            announcer=injector.getInstance(Announcer.class);
             // TODO: remove this huge hack
             updateConnectorIds(
-                    injector.getInstance(Announcer.class),
+//                    injector.getInstance(Announcer.class),
+                    announcer,
                     injector.getInstance(CatalogManager.class),
                     injector.getInstance(ServerConfig.class),
                     injector.getInstance(NodeSchedulerConfig.class));
 
             // TODO: thrift server port should be announced by discovery server similar to http/https ports
             updateThriftServerPort(
-                    injector.getInstance(Announcer.class),
+//                    injector.getInstance(Announcer.class),
+                    announcer,
                     injector.getInstance(DriftServer.class));
 
             injector.getInstance(StaticFunctionNamespaceStore.class).loadFunctionNamespaceManagers();
@@ -167,7 +177,8 @@ public class PrestoServer
             injector.getInstance(TempStorageManager.class).loadTempStorages();
             injector.getInstance(QueryPrerequisitesManager.class).loadQueryPrerequisites();
 
-            injector.getInstance(Announcer.class).start();
+//            injector.getInstance(Announcer.class).start();
+            announcer.start();
 
             log.info("======== SERVER STARTED ========");
         }
@@ -252,4 +263,33 @@ public class PrestoServer
         }
         throw new IllegalArgumentException("Presto announcement not found: " + announcements);
     }
+
+    /**
+     *catalog变动更新数据源信息
+     */
+    public static void updateDatasourcesAnnouncement(String connectorId, DatasourceAction action)
+    {
+        // get existing announcement
+        ServiceAnnouncement announcement = getPrestoAnnouncement(announcer.getServiceAnnouncements());
+
+        // update datasources property
+        Map<String, String> properties = new LinkedHashMap<>(announcement.getProperties());
+        String property = nullToEmpty(properties.get("connectorIds"));
+        Set<String> datasources = new LinkedHashSet<>(Splitter.on(',').trimResults().omitEmptyStrings().splitToList(property));
+        if (action == DatasourceAction.ADD) {
+            datasources.add(connectorId);
+//            updateConnectorIds(announcer,connectorId,DatasourceAction.ADD);
+        }
+        else if (action == DatasourceAction.DELETE) {
+            datasources.remove(connectorId);
+//            updateConnectorIds(announcer,connectorId,DatasourceAction.DELETE);
+        }
+        properties.put("connectorIds", Joiner.on(',').join(datasources));
+
+        // update announcement
+        announcer.removeServiceAnnouncement(announcement.getId());
+        announcer.addServiceAnnouncement(serviceAnnouncement(announcement.getType()).addProperties(properties).build());
+        announcer.forceAnnounce();
+    }
+
 }
