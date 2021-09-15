@@ -1,6 +1,7 @@
 package com.facebook.presto.api;
 
 import com.facebook.airlift.log.Logger;
+import com.facebook.presto.server.PrestoServer;
 import org.json.simple.JSONObject;
 
 import javax.ws.rs.Consumes;
@@ -27,8 +28,12 @@ public class CatalogApi {
     private static final String BASE_DIR = "etc/catalog/";
     private static final Integer SUCCESS = 0;
     private static final Integer ERROR = -1;
+    private static final Integer UNKNOWN = -2;
 
 
+    /**
+     * 增加catalog
+     */
     @POST
     @Path("/add")
     @Consumes({MediaType.APPLICATION_JSON})
@@ -36,6 +41,9 @@ public class CatalogApi {
         return Response.ok(addMode(json)).build();
     }
 
+    /**
+     * 删除catalog
+     */
     @POST
     @Path("/delete")
     @Consumes({MediaType.APPLICATION_JSON})
@@ -44,6 +52,9 @@ public class CatalogApi {
     }
 
 
+    /**
+     * 更新catalog
+     */
     @POST
     @Path("/update")
     @Consumes({MediaType.APPLICATION_JSON})
@@ -53,6 +64,55 @@ public class CatalogApi {
         }
         return Response.ok(ERROR).build();
     }
+
+    /**
+     * 判断catalog配置是否存在
+     */
+    @POST
+    @Path("/conf")
+    @Consumes({MediaType.APPLICATION_JSON})
+    public Response judgeCatalogIsExit(JSONObject json) {
+        String catalogName = json.get("catalogName").toString();
+        if (PrestoServer.isExist(catalogName)) {
+            return Response.ok(SUCCESS).build();
+        }
+        return Response.ok(ERROR).build();
+    }
+
+    /**
+     * 判断catalog文件是否存在
+     */
+    @POST
+    @Path("/file")
+    @Consumes({MediaType.APPLICATION_JSON})
+    public Response judgeCatalogFileIsExit(JSONObject json) {
+        String catalogName = json.get("catalogName") + ".properties";
+        File file = new File(BASE_DIR + catalogName);
+        if (file.exists()) {
+            return Response.ok(SUCCESS).build();
+        }
+        return Response.ok(ERROR).build();
+    }
+
+    /**
+     * 先判断catalog配置是否存在
+     * 如果不存在，判断配置文件是否存在
+     */
+    @POST
+    @Path("/catalog")
+    @Consumes({MediaType.APPLICATION_JSON})
+    public Response judgeCatalog(JSONObject json) {
+        String catalogName = json.get("catalogName").toString();
+        String catalogFileName = json.get("catalogName") + ".properties";
+        File file = new File(BASE_DIR + catalogFileName);
+        if (PrestoServer.isExist(catalogName)) {
+            return Response.ok(SUCCESS).build();
+        } else if (file.exists()) {
+            return Response.ok(UNKNOWN).build();
+        }
+        return Response.ok(ERROR).build();
+    }
+
 
     /**
      * add catalog
